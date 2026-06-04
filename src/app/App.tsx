@@ -133,8 +133,20 @@ export default function App() {
               'ads.txt': { ...p.files?.['ads.txt'], parseResult: null },
               'app-ads.txt': { ...p.files?.['app-ads.txt'], parseResult: null },
             }
-          }));
-          setPublishers(enhanced as Publisher[]);
+          })) as Publisher[];
+
+          setPublishers(enhanced);
+
+          // Auto-fetch all publishers that have real URLs (not pasted content)
+          setTimeout(() => {
+            enhanced.forEach(pub => {
+              if (!pub.url || pub.url.startsWith('pasted://')) return;
+              const fileTypes: FileType[] = [];
+              if (pub.publisherType === 'website' || pub.publisherType === 'both') fileTypes.push('ads.txt');
+              if (pub.publisherType === 'app' || pub.publisherType === 'both') fileTypes.push('app-ads.txt');
+              fileTypes.forEach(ft => doFetch(pub, ft));
+            });
+          }, 0);
         }
       } catch { /* invalid JSON */ }
     };
