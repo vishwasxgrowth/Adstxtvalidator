@@ -1,6 +1,7 @@
 import { Trash2, RefreshCw, ExternalLink, ChevronRight, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import type { Publisher, FileType } from '../types';
+import { LOGO_SRC } from '../constants/logo';
 
 interface Props {
   publisher: Publisher;
@@ -115,7 +116,10 @@ export function PublisherCard({ publisher, onRemove, onRefetch, onClick }: Props
       {/* Loading state */}
       {status === 'loading' && (
         <div className="mt-3 flex items-center gap-2 text-blue-500">
-          <RefreshCw size={12} className="animate-spin" />
+          <div className="relative w-5 h-5 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full border-2 border-blue-200 border-t-blue-500 animate-spin" />
+            <img src={LOGO_SRC} alt="" width={10} height={10} style={{ animation: 'logoPulse 1.6s ease-in-out infinite' }} />
+          </div>
           <span className="text-xs">Fetching {selectedFileType}…</span>
         </div>
       )}

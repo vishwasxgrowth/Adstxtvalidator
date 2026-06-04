@@ -4,7 +4,7 @@ import {
   Info, CheckCircle, ChevronDown, Plus, Sparkles,
   Hash, FileText, Copy, CheckCheck, Save, Download, Trash2,
 } from 'lucide-react';
-import type { Publisher, FileType } from '../types';
+import { LOGO_SRC } from '../constants/logo';
 import type { ParsedLine, ValidationIssue } from '../utils/adsTxtParser';
 import { addEntriesUnderGroup, parseAdsTxt } from '../utils/adsTxtParser';
 
@@ -480,7 +480,7 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT PANEL */}
-        <div className="w-72 xl:w-80 shrink-0 flex flex-col border-r border-gray-200 bg-slate-50 overflow-y-auto">
+        <div className="w-[30%] shrink-0 flex flex-col border-r border-gray-200 bg-slate-50 overflow-y-auto dark:bg-slate-900 dark:border-slate-700">
 
           {/* Filter section */}
           <div className="p-4 border-b border-gray-200">
@@ -618,9 +618,12 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
         {/* RIGHT PANEL */}
         <div ref={rightPanelRef} className="flex-1 overflow-y-auto bg-gray-50 py-2">
           {status === 'loading' && (
-            <div className="flex items-center justify-center py-20 text-slate-400">
-              <RefreshCw size={18} className="animate-spin mr-2" />
-              <span className="text-sm">Fetching {selectedFileType}…</span>
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <div className="relative w-14 h-14 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-[2.5px] border-gray-200 border-t-blue-500 animate-spin" />
+                <img src={LOGO_SRC} alt="" width={28} height={28} style={{ animation: 'logoPulse 1.6s ease-in-out infinite' }} />
+              </div>
+              <span className="text-sm text-slate-400">Fetching {selectedFileType}…</span>
             </div>
           )}
 
