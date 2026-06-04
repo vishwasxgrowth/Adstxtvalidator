@@ -195,6 +195,7 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
   const [copied, setCopied] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
+  const [showDupHighlight, setShowDupHighlight] = useState(false);
   const rightPanelRef = useRef<HTMLDivElement>(null);
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -332,6 +333,46 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
       return false;
     });
   }, [parseResult, activeFilters]);
+
+  const entryAnalysis = useMemo(() => {
+    if (!newEntries.trim() || !parseResult) return null;
+
+    const existingKeys = new Set<string>();
+    for (const line of parseResult.lines) {
+      if (line.type === 'data' && line.domain && line.publisherId && line.relationship) {
+        existingKeys.add(
+          `${line.domain.toLowerCase()},${line.publisherId.toLowerCase()},${line.relationship.toUpperCase()}`
+        );
+      }
+    }
+
+    const parsed = parseAdsTxt(newEntries);
+    const rawLines = newEntries.split('\n');
+
+    const lineResults = rawLines.map((raw, idx) => {
+      const lineNumber = idx + 1;
+      const parsedLine = parsed.lines.find(l => l.lineNumber === lineNumber);
+      const lineIssues = parsed.issues.filter(i => i.lineNumber === lineNumber);
+      if (!parsedLine || parsedLine.type !== 'data') {
+        return { raw, status: 'other' as const, hasError: false, hasWarning: false };
+      }
+      const key = `${(parsedLine.domain || '').toLowerCase()},${(parsedLine.publisherId || '').toLowerCase()},${(parsedLine.relationship || '').toUpperCase()}`;
+      return {
+        raw,
+        status: existingKeys.has(key) ? 'duplicate' as const : 'new' as const,
+        hasError: lineIssues.some(i => i.severity === 'error'),
+        hasWarning: lineIssues.some(i => i.severity === 'warning'),
+      };
+    });
+
+    return {
+      lineResults,
+      duplicateCount: lineResults.filter(l => l.status === 'duplicate').length,
+      newCount: lineResults.filter(l => l.status === 'new').length,
+      errorCount: lineResults.filter(l => l.hasError).length,
+      warningCount: lineResults.filter(l => l.hasWarning && !l.hasError).length,
+    };
+  }, [newEntries, parseResult]);
 
   const FILTERS: { key: FilterKey; label: string; count: number; color: string; activeColor: string }[] = [
     {
@@ -554,17 +595,119 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
                 )}
               </div>
 
-              {/* New entries textarea */}
+              {/* New entries textarea + live analysis */}
               <div>
                 <label className="block text-xs text-slate-600 mb-1.5">Paste new entries</label>
-                <textarea
-                  id="detail-textarea-new-entries"
-                  value={newEntries}
-                  onChange={e => setNewEntries(e.target.value)}
-                  placeholder={'google.com, pub-1234567890, DIRECT, f08c47fec0942fa0\nappnexus.com, 1234, RESELLER'}
-                  rows={6}
-                  className="w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
-                />
+
+                {showDupHighlight && entryAnalysis ? (
+                  /* Highlight mode: read-only view with duplicate lines in red */
+                  <div className="border border-red-200 rounded-lg overflow-hidden bg-white">
+                    <div className="overflow-y-auto" style={{ maxHeight: '144px' }}>
+                      {entryAnalysis.lineResults.map((line, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            background: line.status === 'duplicate' ? '#fef2f2' : 'transparent',
+                            padding: '2px 10px',
+                            fontFamily: 'monospace',
+                            fontSize: '10px',
+                            lineHeight: '1.7',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-all',
+                            borderBottom: i < entryAnalysis.lineResults.length - 1 ? '0.5px solid rgba(0,0,0,0.04)' : 'none',
+                            minHeight: '20px',
+                            color: line.status === 'duplicate' ? '#991b1b' : '#334155',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                          }}
+                        >
+                          {line.status === 'duplicate' && (
+                            <span style={{ fontSize: '8px', fontWeight: 700, background: '#fecaca', color: '#991b1b', padding: '0 4px', borderRadius: '3px', flexShrink: 0 }}>DUP</span>
+                          )}
+                          <span style={{ opacity: line.raw.trim() ? 1 : 0.3 }}>{line.raw || '(empty line)'}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setShowDupHighlight(false)}
+                      className="w-full text-xs text-slate-400 hover:text-slate-600 py-1.5 border-t border-gray-100 transition-colors text-center"
+                    >
+                      ← Back to edit
+                    </button>
+                  </div>
+                ) : (
+                  <textarea
+                    id="detail-textarea-new-entries"
+                    value={newEntries}
+                    onChange={e => { setNewEntries(e.target.value); setShowDupHighlight(false); }}
+                    placeholder={'google.com, pub-1234567890, DIRECT, f08c47fec0942fa0\nappnexus.com, 1234, RESELLER'}
+                    rows={6}
+                    className="w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
+                  />
+                )}
+
+                {/* Live analysis: shown whenever there's content */}
+                {entryAnalysis && newEntries.trim() && (
+                  <div className="mt-2 space-y-1.5">
+                    {/* New / Duplicate action buttons */}
+                    <div className="flex gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => {
+                          const filtered = entryAnalysis.lineResults
+                            .filter(l => l.status !== 'duplicate')
+                            .map(l => l.raw)
+                            .join('\n')
+                            .trim();
+                          setNewEntries(filtered);
+                          setShowDupHighlight(false);
+                        }}
+                        title="Remove duplicates from box — keep only new entries"
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${
+                          entryAnalysis.newCount > 0
+                            ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+                            : 'bg-gray-50 border-gray-200 text-gray-400 cursor-default'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                        New ({entryAnalysis.newCount})
+                      </button>
+
+                      <button
+                        onClick={() => entryAnalysis.duplicateCount > 0 && setShowDupHighlight(d => !d)}
+                        title="Highlight duplicate lines in red inside the box"
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${
+                          entryAnalysis.duplicateCount > 0
+                            ? showDupHighlight
+                              ? 'bg-red-100 border-red-300 text-red-700'
+                              : 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
+                            : 'bg-gray-50 border-gray-200 text-gray-400 cursor-default'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                        Duplicate ({entryAnalysis.duplicateCount})
+                      </button>
+                    </div>
+
+                    {/* Error / Warning counts */}
+                    {(entryAnalysis.errorCount > 0 || entryAnalysis.warningCount > 0) && (
+                      <div className="flex gap-3 text-xs">
+                        {entryAnalysis.errorCount > 0 && (
+                          <span className="flex items-center gap-1 text-red-500">
+                            <XCircle size={10} />
+                            {entryAnalysis.errorCount} error{entryAnalysis.errorCount !== 1 ? 's' : ''} in pasted entries
+                          </span>
+                        )}
+                        {entryAnalysis.warningCount > 0 && (
+                          <span className="flex items-center gap-1 text-amber-500">
+                            <AlertTriangle size={10} />
+                            {entryAnalysis.warningCount} warning{entryAnalysis.warningCount !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Apply button */}
