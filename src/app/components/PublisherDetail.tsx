@@ -480,7 +480,7 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT PANEL */}
-        <div className="w-[30%] shrink-0 flex flex-col border-r border-gray-200 bg-slate-50 overflow-y-auto dark:bg-slate-900 dark:border-slate-700">
+        <div className="w-[30%] shrink-0 flex flex-col border-r border-gray-200 bg-slate-50 overflow-y-auto">
 
           {/* Filter section */}
           <div className="p-4 border-b border-gray-200">

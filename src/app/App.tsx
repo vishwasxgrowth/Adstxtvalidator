@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, CheckCircle, Sun, Moon, Upload, Download } from 'lucide-react';
+import { Plus, CheckCircle, Upload, Download } from 'lucide-react';
 import { AddPublisherModal } from './components/AddPublisherModal';
 import { PublisherCard } from './components/PublisherCard';
 import { PublisherDetail } from './components/PublisherDetail';
@@ -38,7 +38,6 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedFileType, setSelectedFileType] = useState<FileType>('ads.txt');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [dark, setDark] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const isFirstRender = useRef(true);
@@ -144,13 +143,16 @@ export default function App() {
   }
 
   const selectedPublisher = publishers.find(p => p.id === selectedId) ?? null;
-  const isLoading = publishers.some(p => p.files['ads.txt'].status === 'loading' || p.files['app-ads.txt'].status === 'loading');
+  const isLoading = publishers.some(p =>
+    p.files['ads.txt'].status === 'loading' || p.files['app-ads.txt'].status === 'loading'
+  );
 
   return (
-    <div className={`min-h-full flex flex-col ${dark ? 'dark' : ''}`} style={{ background: dark ? '#080d1a' : '#f8fafc' }}>
+    /* h-screen + overflow-hidden locks the outer shell so panels scroll independently */
+    <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
       <input ref={importInputRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
 
-      {/* ── MIRA-STYLE HEADER (always visible) ── */}
+      {/* ── HEADER (always visible, never scrolls) ── */}
       <header
         style={{ background: '#0c1220', height: '52px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}
         className="flex items-center px-4 sm:px-6 gap-0"
@@ -180,21 +182,11 @@ export default function App() {
             <span className="text-xs">Fetching…</span>
           </div>
         )}
-        <button
-          onClick={() => setDark(d => !d)}
-          style={{
-            padding: '5px 11px', borderRadius: '7px', border: '0.5px solid rgba(255,255,255,0.1)',
-            background: 'rgba(255,255,255,0.04)', color: '#94a3b8', fontSize: '11px',
-            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
-          }}
-        >
-          {dark ? <Moon size={12} /> : <Sun size={12} />}
-          {dark ? 'Dark' : 'Light'}
-        </button>
       </header>
 
       {selectedPublisher ? (
-        <div className="h-full flex flex-col" style={{ background: dark ? '#080d1a' : '#f8fafc' }}>
+        /* Detail view fills the remaining height; scroll is managed inside PublisherDetail */
+        <div className="flex-1 overflow-hidden flex flex-col">
           <PublisherDetail
             publisher={selectedPublisher}
             selectedFileType={selectedFileType}
@@ -206,8 +198,8 @@ export default function App() {
         </div>
       ) : (
         <>
-          {/* ── TABS ── */}
-          <div style={{ background: '#0c1220' }} className="flex px-4 sm:px-6 pt-2.5">
+          {/* ── TABS (never scrolls) ── */}
+          <div style={{ background: '#0c1220', flexShrink: 0 }} className="flex px-4 sm:px-6 pt-2.5">
             <button
               id="tab-btn-publishers"
               className="pb-3 text-sm font-semibold border-b-2 -mb-px border-blue-500 text-white"
@@ -215,19 +207,17 @@ export default function App() {
               Publishers
             </button>
           </div>
-          <div style={{ height: '24px', background: `linear-gradient(to bottom, #0c1220, ${dark ? '#080d1a' : '#f8fafc'})` }} />
+          <div style={{ height: '24px', background: 'linear-gradient(to bottom, #0c1220, #f8fafc)', flexShrink: 0 }} />
 
-          {/* ── MAIN CONTENT ── */}
-          <main className="flex-1 relative" style={{ background: dark ? '#080d1a' : '#f8fafc' }}>
-
-            {/* Floating logos background */}
+          {/* ── HOME CONTENT (scrollable) ── */}
+          <main className="flex-1 overflow-y-auto relative bg-gray-50">
+            {/* Floating logos */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
               {FLOAT_POSITIONS.map((f, i) => (
                 <img
                   key={i}
                   src={LOGO_SRC}
                   alt=""
-                  className="float-logo"
                   style={{
                     position: 'absolute',
                     left: `${f.x}%`,
@@ -243,31 +233,27 @@ export default function App() {
               ))}
             </div>
 
-            {/* Content */}
             <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 space-y-8 relative" style={{ zIndex: 1 }}>
               <div>
-                {/* Section header */}
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className={`leading-tight font-mono text-lg ${dark ? 'text-slate-100' : 'text-slate-800'}`}>Publishers</h2>
+                    <h2 className="text-slate-800 leading-tight font-mono text-lg">Publishers</h2>
                     <p className="text-xs text-slate-400 mt-0.5">Manage ads.txt and app-ads.txt files for each publisher</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => importInputRef.current?.click()}
-                      className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl transition-colors border ${
-                        dark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-slate-500 hover:bg-gray-100'
-                      }`}
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl transition-colors border border-gray-200 text-slate-500 hover:bg-gray-100 bg-white"
                     >
                       <Upload size={12} /> Import
                     </button>
                     <button
                       onClick={handleExport}
                       disabled={publishers.length === 0}
-                      className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl transition-colors border ${
+                      className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl transition-colors border bg-white ${
                         publishers.length === 0
                           ? 'border-gray-200 text-gray-300 cursor-not-allowed'
-                          : dark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-slate-500 hover:bg-gray-100'
+                          : 'border-gray-200 text-slate-500 hover:bg-gray-100'
                       }`}
                     >
                       <Download size={12} /> Export
@@ -275,9 +261,7 @@ export default function App() {
                     <button
                       id="btn-add-publisher"
                       onClick={() => setShowAddModal(true)}
-                      className={`flex items-center gap-1.5 px-3.5 py-2 text-white text-xs rounded-xl transition-colors shrink-0 ${
-                        dark ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-800 hover:bg-slate-700'
-                      }`}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs rounded-xl transition-colors shrink-0"
                     >
                       <Plus size={12} /> Add Publisher
                     </button>
@@ -285,9 +269,9 @@ export default function App() {
                 </div>
 
                 {publishers.length === 0 ? (
-                  <div className={`rounded-2xl border-2 border-dashed px-6 py-8 text-center ${dark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'}`}>
-                    <p className={`text-sm mb-1 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>No publishers added yet</p>
-                    <p className={`text-xs mb-5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
+                  <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-white px-6 py-8 text-center">
+                    <p className="text-sm text-slate-500 mb-1">No publishers added yet</p>
+                    <p className="text-xs text-slate-400 mb-5">
                       Click <strong>Add Publisher</strong> above to add and validate files.
                     </p>
                     <div className="space-y-1.5 text-left max-w-xs mx-auto">
@@ -322,11 +306,7 @@ export default function App() {
                     <button
                       id="btn-add-another-publisher"
                       onClick={() => setShowAddModal(true)}
-                      className={`w-full flex items-center justify-center gap-2 py-3.5 border-2 border-dashed rounded-2xl text-xs transition-all ${
-                        dark
-                          ? 'border-slate-700 text-slate-500 hover:text-blue-400 hover:border-blue-700'
-                          : 'border-gray-200 text-slate-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/30'
-                      }`}
+                      className="w-full flex items-center justify-center gap-2 py-3.5 border-2 border-dashed border-gray-200 rounded-2xl text-xs text-slate-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/30 transition-all"
                     >
                       <Plus size={12} /> Add another publisher
                     </button>
