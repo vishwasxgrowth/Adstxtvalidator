@@ -16,8 +16,8 @@ interface Props {
 }
 
 const PUBLISHER_TYPES: { id: PublisherType; label: string; desc: string; icon: React.ElementType }[] = [
-  { id: 'website', label: 'Website', desc: 'ads.txt', icon: Globe },
   { id: 'app', label: 'App', desc: 'app-ads.txt', icon: Smartphone },
+  { id: 'website', label: 'Website', desc: 'ads.txt', icon: Globe },
   { id: 'both', label: 'Both', desc: 'ads.txt + app-ads.txt', icon: Layers },
 ];
 
@@ -117,7 +117,7 @@ function validateUrl(v: string): boolean {
 
 export function AddPublisherModal({ onAdd, onClose }: Props) {
   const [name, setName] = useState('');
-  const [publisherType, setPublisherType] = useState<PublisherType>('website');
+  const [publisherType, setPublisherType] = useState<PublisherType>('app');
   const [adsEntry, setAdsEntry] = useState<FileEntry>(makeEntry('ads.txt'));
   const [appEntry, setAppEntry] = useState<FileEntry>(makeEntry('app-ads.txt'));
 

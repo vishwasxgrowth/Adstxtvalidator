@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ArrowLeft, RefreshCw, ExternalLink, XCircle, AlertTriangle,
   Info, CheckCircle, ChevronDown, Plus, Sparkles,
-  Hash, FileText, Copy, CheckCheck, Save, Download,
+  Hash, FileText, Copy, CheckCheck, Save, Download, Trash2,
 } from 'lucide-react';
 import type { Publisher, FileType } from '../types';
 import type { ParsedLine, ValidationIssue } from '../utils/adsTxtParser';
@@ -52,7 +52,7 @@ function SeverityBadge({ issues }: { issues: ValidationIssue[] }) {
   );
 }
 
-function EntryRow({ line, issues }: { line: ParsedLine; issues: ValidationIssue[] }) {
+function EntryRow({ line, issues, isSelected = false, isSelectable = false }: { line: ParsedLine; issues: ValidationIssue[]; isSelected?: boolean; isSelectable?: boolean }) {
   const [open, setOpen] = useState(false);
   const lineIssues = getLineIssues(line.lineNumber, issues);
   const hasIssues = lineIssues.some(i => i.severity === 'error' || i.severity === 'warning');
@@ -101,20 +101,29 @@ function EntryRow({ line, issues }: { line: ParsedLine; issues: ValidationIssue[
   }
 
   // Data entry
-  const rowBg = isHighSeverity
-    ? 'bg-red-50 border-red-200 hover:bg-red-100'
-    : isDuplicate
-      ? 'bg-orange-50 border-orange-200 hover:bg-orange-100'
-      : hasIssues
-        ? 'bg-amber-50 border-amber-200 hover:bg-amber-100'
-        : 'bg-white border-gray-100 hover:bg-gray-50';
+  const rowBg = isSelected
+    ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+    : isHighSeverity
+      ? 'bg-red-50 border-red-200 hover:bg-red-100'
+      : isDuplicate
+        ? 'bg-orange-50 border-orange-200 hover:bg-orange-100'
+        : hasIssues
+          ? 'bg-amber-50 border-amber-200 hover:bg-amber-100'
+          : 'bg-white border-gray-100 hover:bg-gray-50';
 
   return (
     <div className="mx-2 my-0.5">
       <div
         className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border cursor-pointer transition-colors ${rowBg}`}
-        onClick={() => lineIssues.length > 0 && setOpen(o => !o)}
+        onClick={() => lineIssues.length > 0 && !isSelectable && setOpen(o => !o)}
       >
+        {isSelectable && (
+          <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+            isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'
+          }`}>
+            {isSelected && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          </div>
+        )}
         <span className="text-xs text-slate-300 w-8 text-right shrink-0 tabular-nums">{line.lineNumber}</span>
 
         {/* Entry fields */}
@@ -179,6 +188,7 @@ function IssueCard({ issue }: { issue: ValidationIssue }) {
 
 export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange, onBack, onRefetch, onUpdateContent }: Props) {
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(new Set());
+  const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set());
   const [selectedGroup, setSelectedGroup] = useState('');
   const [newEntries, setNewEntries] = useState('');
   const [applySuccess, setApplySuccess] = useState(false);
@@ -208,6 +218,35 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
       setIsDirty(false);
     }
   }, [content, status]);
+
+  function toggleLineSelect(lineNumber: number) {
+    setSelectedLines(prev => {
+      const next = new Set(prev);
+      if (next.has(lineNumber)) next.delete(lineNumber);
+      else next.add(lineNumber);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (!parseResult) return;
+    const selectableLines = parseResult.lines.filter(l => l.type === 'data' || l.type === 'invalid');
+    if (selectedLines.size === selectableLines.length && selectableLines.length > 0) {
+      setSelectedLines(new Set());
+    } else {
+      setSelectedLines(new Set(selectableLines.map(l => l.lineNumber)));
+    }
+  }
+
+  function handleDeleteSelected() {
+    if (!content || selectedLines.size === 0) return;
+    const lines = content.split('\n');
+    const updated = lines.filter((_, i) => !selectedLines.has(i + 1)).join('\n');
+    onUpdateContent(selectedFileType, updated);
+    setSelectedLines(new Set());
+    setIsDirty(true);
+    setIsSaved(false);
+  }
 
   function toggleFilter(key: FilterKey) {
     setActiveFilters(prev => {
@@ -599,6 +638,32 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
 
           {status === 'success' && parseResult && (
             <>
+              {/* Multi-select toolbar */}
+              <div className="mx-4 mb-2 px-3 py-2 bg-white border border-gray-200 rounded-xl flex items-center gap-3">
+                <button
+                  onClick={toggleSelectAll}
+                  className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  {selectedLines.size === parseResult.lines.filter(l => l.type === 'data' || l.type === 'invalid').length && parseResult.lines.filter(l => l.type === 'data' || l.type === 'invalid').length > 0
+                    ? 'Deselect all' : 'Select all'}
+                </button>
+                <span className="text-xs text-slate-400">
+                  {selectedLines.size > 0 ? <><span className="font-medium text-slate-600">{selectedLines.size}</span> selected</> : 'Click rows to select'}
+                </span>
+                <div className="flex-1" />
+                <button
+                  onClick={handleDeleteSelected}
+                  disabled={selectedLines.size === 0}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all ${
+                    selectedLines.size > 0
+                      ? 'bg-red-50 border border-red-200 text-red-600 hover:bg-red-100'
+                      : 'border border-gray-200 text-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  <Trash2 size={12} /> Delete selected
+                </button>
+              </div>
+
               {/* Filter status indicator */}
               {activeFilters.size > 0 && (
                 <div className="mx-4 mb-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2">
@@ -619,13 +684,21 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
                   {filteredLines.map(line => {
                     const isGroupHeader = line.type === 'comment' && parseResult.groups?.includes(line.raw.trim());
                     const groupKey = line.raw.trim();
+                    const isSelectable = line.type === 'data' || line.type === 'invalid';
+                    const isSelected = selectedLines.has(line.lineNumber);
                     return (
                       <div
                         key={line.lineNumber}
                         ref={isGroupHeader ? (el) => { groupRefs.current[groupKey] = el; } : undefined}
                         className={isGroupHeader && selectedGroup === groupKey ? 'ring-2 ring-blue-400 ring-offset-1 rounded-lg mx-2 my-1' : ''}
+                        onClick={isSelectable ? () => toggleLineSelect(line.lineNumber) : undefined}
                       >
-                        <EntryRow line={line} issues={parseResult.issues} />
+                        <EntryRow
+                          line={line}
+                          issues={parseResult.issues}
+                          isSelected={isSelected}
+                          isSelectable={isSelectable}
+                        />
                       </div>
                     );
                   })}

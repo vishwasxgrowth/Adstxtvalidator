@@ -129,35 +129,27 @@ export function PublisherCard({ publisher, onRemove, onRefetch, onClick }: Props
 
       {/* Stats row */}
       {status === 'success' && stats && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-100">
-            <span className="text-xs text-slate-500">{stats.totalEntries} entries</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 border border-green-100">
-            <span className="text-xs text-green-600">DIRECT {stats.directEntries}</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 border border-purple-100">
-            <span className="text-xs text-purple-600">RESELLER {stats.resellerEntries}</span>
-          </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="text-xs text-slate-400">{stats.totalEntries} entries</span>
 
           <div className="flex-1" />
 
           {hasErrors && (
-            <div className="flex items-center gap-1 text-red-500">
-              <XCircle size={12} />
-              <span className="text-xs">{stats.errorCount} error{stats.errorCount !== 1 ? 's' : ''}</span>
+            <div className="flex items-center gap-1.5 text-red-500">
+              <XCircle size={16} />
+              <span className="text-sm font-medium">{stats.errorCount} error{stats.errorCount !== 1 ? 's' : ''}</span>
             </div>
           )}
           {hasWarnings && (
-            <div className="flex items-center gap-1 text-amber-500">
-              <AlertTriangle size={12} />
-              <span className="text-xs">{stats.warningCount} warning{stats.warningCount !== 1 ? 's' : ''}</span>
+            <div className="flex items-center gap-1.5 text-amber-500">
+              <AlertTriangle size={16} />
+              <span className="text-sm font-medium">{stats.warningCount} warning{stats.warningCount !== 1 ? 's' : ''}</span>
             </div>
           )}
           {isHealthy && (
-            <div className="flex items-center gap-1 text-emerald-500">
-              <CheckCircle size={12} />
-              <span className="text-xs">Valid</span>
+            <div className="flex items-center gap-1.5 text-emerald-500">
+              <CheckCircle size={16} />
+              <span className="text-sm font-medium">Valid</span>
             </div>
           )}
         </div>
