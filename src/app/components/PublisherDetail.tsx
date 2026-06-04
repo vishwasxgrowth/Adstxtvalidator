@@ -1,0 +1,650 @@
+import { useState, useMemo, useEffect, useRef } from 'react';
+import {
+  ArrowLeft, RefreshCw, ExternalLink, XCircle, AlertTriangle,
+  Info, CheckCircle, ChevronDown, Plus, Sparkles,
+  Hash, FileText, Copy, CheckCheck, Save, Download,
+} from 'lucide-react';
+import type { Publisher, FileType } from '../types';
+import type { ParsedLine, ValidationIssue } from '../utils/adsTxtParser';
+import { addEntriesUnderGroup, parseAdsTxt } from '../utils/adsTxtParser';
+
+
+
+type FilterKey = 'errors' | 'warnings' | 'duplicates' | 'comments';
+
+interface Props {
+  publisher: Publisher;
+  selectedFileType: FileType;
+  onFileTypeChange: (fileType: FileType) => void;
+  onBack: () => void;
+  onRefetch: (fileType: FileType) => void;
+  onUpdateContent: (fileType: FileType, content: string) => void;
+}
+
+function getLineIssues(lineNumber: number, issues: ValidationIssue[]) {
+  return issues.filter(i => i.lineNumber === lineNumber);
+}
+
+function SeverityBadge({ issues }: { issues: ValidationIssue[] }) {
+  const hasError = issues.some(i => i.severity === 'error');
+  const hasWarning = issues.some(i => i.severity === 'warning');
+  const hasDuplicate = issues.some(i => i.issueType === 'duplicate');
+
+  if (hasError) return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-xs shrink-0">
+      <XCircle size={10} /> Error
+    </span>
+  );
+  if (hasDuplicate) return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 text-xs shrink-0">
+      <AlertTriangle size={10} /> Duplicate
+    </span>
+  );
+  if (hasWarning) return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 text-xs shrink-0">
+      <AlertTriangle size={10} /> Warning
+    </span>
+  );
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-600 text-xs shrink-0">
+      <CheckCircle size={10} /> Valid
+    </span>
+  );
+}
+
+function EntryRow({ line, issues }: { line: ParsedLine; issues: ValidationIssue[] }) {
+  const [open, setOpen] = useState(false);
+  const lineIssues = getLineIssues(line.lineNumber, issues);
+  const hasIssues = lineIssues.some(i => i.severity === 'error' || i.severity === 'warning');
+  const isHighSeverity = lineIssues.some(i => i.severity === 'error');
+  const isDuplicate = lineIssues.some(i => i.issueType === 'duplicate');
+
+  if (line.type === 'empty') {
+    return <div className="h-3" />;
+  }
+
+  if (line.type === 'comment') {
+    return (
+      <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg mx-2 my-1">
+        <Hash size={12} className="text-slate-400 shrink-0" />
+        <span className="text-xs text-slate-300 font-mono">{line.raw.trim()}</span>
+      </div>
+    );
+  }
+
+  if (line.type === 'variable') {
+    return (
+      <div className="flex items-center gap-3 px-4 py-2 mx-2 my-0.5 rounded-lg border border-purple-100 bg-purple-50">
+        <span className="text-xs text-slate-400 w-8 text-right shrink-0">{line.lineNumber}</span>
+        <span className="text-xs font-mono text-purple-700 flex-1">{line.raw.trim()}</span>
+        <span className="text-xs text-purple-400 shrink-0">Variable</span>
+      </div>
+    );
+  }
+
+  if (line.type === 'invalid') {
+    return (
+      <div className="mx-2 my-0.5">
+        <div
+          className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-red-200 bg-red-50 cursor-pointer"
+          onClick={() => setOpen(o => !o)}
+        >
+          <span className="text-xs text-slate-400 w-8 text-right shrink-0">{line.lineNumber}</span>
+          <span className="text-xs font-mono text-red-700 flex-1 break-all">{line.raw || '(empty)'}</span>
+          <XCircle size={13} className="text-red-400 shrink-0" />
+        </div>
+        {lineIssues.map((issue, idx) => (
+          <IssueCard key={idx} issue={issue} />
+        ))}
+      </div>
+    );
+  }
+
+  // Data entry
+  const rowBg = isHighSeverity
+    ? 'bg-red-50 border-red-200 hover:bg-red-100'
+    : isDuplicate
+      ? 'bg-orange-50 border-orange-200 hover:bg-orange-100'
+      : hasIssues
+        ? 'bg-amber-50 border-amber-200 hover:bg-amber-100'
+        : 'bg-white border-gray-100 hover:bg-gray-50';
+
+  return (
+    <div className="mx-2 my-0.5">
+      <div
+        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border cursor-pointer transition-colors ${rowBg}`}
+        onClick={() => lineIssues.length > 0 && setOpen(o => !o)}
+      >
+        <span className="text-xs text-slate-300 w-8 text-right shrink-0 tabular-nums">{line.lineNumber}</span>
+
+        {/* Entry fields */}
+        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-0.5">
+          {line.domain && (
+            <span className="text-xs font-mono text-slate-700">{line.domain},</span>
+          )}
+          {line.publisherId && (
+            <span className="text-xs font-mono text-blue-600">{line.publisherId},</span>
+          )}
+          {line.relationship && (
+            <span className={`text-xs font-mono ${line.relationship === 'DIRECT' ? 'text-green-600' : 'text-purple-600'}`}>
+              {line.relationship}
+            </span>
+          )}
+          {line.certAuthId && (
+            <span className="text-xs font-mono text-slate-400">, {line.certAuthId}</span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <SeverityBadge issues={lineIssues} />
+          {lineIssues.length > 0 && (
+            <ChevronDown size={13} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+          )}
+        </div>
+      </div>
+
+      {/* Issue cards */}
+      {open && lineIssues.map((issue, idx) => (
+        <IssueCard key={idx} issue={issue} />
+      ))}
+    </div>
+  );
+}
+
+function IssueCard({ issue }: { issue: ValidationIssue }) {
+  const configs = {
+    error: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50 border-red-100', label: 'Error' },
+    warning: { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50 border-amber-100', label: 'Warning' },
+    info: { icon: Info, color: 'text-blue-400', bg: 'bg-blue-50 border-blue-100', label: 'Notice' },
+  };
+  const cfg = configs[issue.severity];
+  const Icon = cfg.icon;
+
+  return (
+    <div className={`ml-12 mr-2 mt-1 px-3 py-2.5 rounded-lg border ${cfg.bg}`}>
+      <div className="flex items-start gap-2">
+        <Icon size={12} className={`${cfg.color} mt-0.5 shrink-0`} />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-slate-700 leading-relaxed">{issue.message}</p>
+          {issue.spec && (
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed border-l-2 border-slate-200 pl-2">
+              {issue.spec}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange, onBack, onRefetch, onUpdateContent }: Props) {
+  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(new Set());
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [newEntries, setNewEntries] = useState('');
+  const [applySuccess, setApplySuccess] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isSaved, setIsSaved] = useState(true);
+  const [isDirty, setIsDirty] = useState(false);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const fileData = publisher.files[selectedFileType];
+  const { status, parseResult, error, content } = fileData;
+
+  // Determine which file type tabs to show based on publisher type
+  const publisherType = publisher.publisherType ?? 'both';
+  const availableFileTabs: FileType[] = publisherType === 'website'
+    ? ['ads.txt']
+    : publisherType === 'app'
+      ? ['app-ads.txt']
+      : ['ads.txt', 'app-ads.txt'];
+
+  // Reset save state when a fresh refetch arrives (content changes from outside)
+  const prevContentRef = useRef(content);
+  useEffect(() => {
+    if (content !== prevContentRef.current && status === 'success') {
+      prevContentRef.current = content;
+      setIsSaved(true);
+      setIsDirty(false);
+    }
+  }, [content, status]);
+
+  function toggleFilter(key: FilterKey) {
+    setActiveFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function handleGroupSelect(group: string) {
+    setSelectedGroup(group);
+    if (group && groupRefs.current[group]) {
+      groupRefs.current[group]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function handleApply() {
+    if (!newEntries.trim() || !content) return;
+    const updated = addEntriesUnderGroup(content, selectedGroup, newEntries);
+    onUpdateContent(selectedFileType, updated);
+    setNewEntries('');
+    setIsDirty(true);
+    setIsSaved(false);
+    setApplySuccess(true);
+    setTimeout(() => setApplySuccess(false), 3000);
+  }
+
+  function handleSave() {
+    if (!content) return;
+
+    // Build timestamp comment
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const timestampLine = `# Changes made on: ${dateStr} at ${timeStr}`;
+
+    // Replace existing timestamp line if present, otherwise prepend
+    const lines = content.split('\n');
+    if (lines[0].startsWith('# Changes made on:')) {
+      lines[0] = timestampLine;
+    } else {
+      lines.unshift(timestampLine);
+    }
+    const updatedContent = lines.join('\n');
+
+    onUpdateContent(selectedFileType, updatedContent);
+    setIsSaved(true);
+    setIsDirty(false);
+  }
+
+  function handleDownload() {
+    if (!isSaved || !content) return;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const safeName = publisher.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    a.download = `${safeName}-${selectedFileType}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function handleCopyAll() {
+    if (!content) return;
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const stats = parseResult?.stats;
+
+  const filteredLines = useMemo(() => {
+    if (!parseResult) return [];
+    if (activeFilters.size === 0) return parseResult.lines;
+
+    return parseResult.lines.filter(line => {
+      const lineIssues = parseResult.issues.filter(i => i.lineNumber === line.lineNumber);
+      if (activeFilters.has('errors') && lineIssues.some(i => i.severity === 'error')) return true;
+      if (activeFilters.has('warnings') && lineIssues.some(i => i.severity === 'warning' && i.issueType !== 'duplicate')) return true;
+      if (activeFilters.has('duplicates') && lineIssues.some(i => i.issueType === 'duplicate')) return true;
+      if (activeFilters.has('comments') && line.type === 'comment') return true;
+      return false;
+    });
+  }, [parseResult, activeFilters]);
+
+  const FILTERS: { key: FilterKey; label: string; count: number; color: string; activeColor: string }[] = [
+    {
+      key: 'errors',
+      label: 'Errors',
+      count: stats?.errorCount ?? 0,
+      color: 'border-gray-200 text-slate-600 hover:border-red-300',
+      activeColor: 'border-red-400 bg-red-50 text-red-600',
+    },
+    {
+      key: 'warnings',
+      label: 'Warnings',
+      count: stats?.warningCount ?? 0,
+      color: 'border-gray-200 text-slate-600 hover:border-amber-300',
+      activeColor: 'border-amber-400 bg-amber-50 text-amber-600',
+    },
+    {
+      key: 'duplicates',
+      label: 'Duplicates',
+      count: stats?.duplicateCount ?? 0,
+      color: 'border-gray-200 text-slate-600 hover:border-orange-300',
+      activeColor: 'border-orange-400 bg-orange-50 text-orange-600',
+    },
+    {
+      key: 'comments',
+      label: 'Comments',
+      count: stats?.commentCount ?? 0,
+      color: 'border-gray-200 text-slate-600 hover:border-slate-400',
+      activeColor: 'border-slate-500 bg-slate-100 text-slate-700',
+    },
+  ];
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Detail header */}
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center gap-3 shrink-0">
+        <button
+          id="detail-btn-back"
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-gray-100 transition-colors"
+        >
+          <ArrowLeft size={14} /> Back
+        </button>
+        <div className="w-px h-5 bg-gray-200" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-slate-800">{publisher.name}</span>
+            {availableFileTabs.length > 1 && (
+              <div className="flex gap-1 bg-slate-50 p-1 rounded-lg">
+                {availableFileTabs.map(ft => (
+                  <button
+                    key={ft}
+                    onClick={() => onFileTypeChange(ft)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium uppercase tracking-wide transition-colors ${
+                      selectedFileType === ft
+                        ? ft === 'app-ads.txt'
+                          ? 'bg-violet-100 text-violet-700'
+                          : 'bg-blue-100 text-blue-700'
+                        : 'bg-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {ft}
+                  </button>
+                ))}
+              </div>
+            )}
+            {availableFileTabs.length === 1 && (
+              <span className={`px-2 py-1 rounded text-[10px] font-medium uppercase tracking-wide ${
+                availableFileTabs[0] === 'app-ads.txt' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
+              }`}>
+                {availableFileTabs[0]}
+              </span>
+            )}
+          </div>
+          <span className="text-xs text-slate-400 ml-0 truncate block sm:inline">{publisher.url}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            id="detail-btn-copy-all"
+            onClick={handleCopyAll}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border ${
+              copied ? 'bg-green-50 border-green-200 text-green-600' : 'border-gray-200 text-slate-500 hover:bg-gray-50'
+            }`}
+          >
+            {copied ? <CheckCheck size={12} /> : <Copy size={12} />}
+            {copied ? 'Copied' : 'Copy all'}
+          </button>
+
+          {/* Save button */}
+          <button
+            id="detail-btn-save"
+            onClick={handleSave}
+            disabled={!content || (!isDirty && isSaved)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border ${
+              isSaved && !isDirty
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-600 cursor-default'
+                : isDirty
+                  ? 'border-blue-400 bg-blue-600 text-white hover:bg-blue-700'
+                  : 'border-gray-200 text-slate-400 cursor-default'
+            }`}
+            title={isDirty ? 'Save current changes' : isSaved ? 'Already saved' : 'No changes to save'}
+          >
+            <Save size={12} />
+            {isSaved && !isDirty ? 'Saved' : 'Save'}
+          </button>
+
+          {/* Download button */}
+          <button
+            id="detail-btn-download"
+            onClick={handleDownload}
+            disabled={!isSaved}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border ${
+              isSaved
+                ? 'border-slate-700 bg-slate-800 text-white hover:bg-slate-700'
+                : 'border-gray-200 text-slate-300 cursor-not-allowed bg-gray-50'
+            }`}
+            title={isSaved ? `Download ${selectedFileType}` : 'Save first before downloading'}
+          >
+            <Download size={12} />
+            Download
+          </button>
+
+          {!publisher.url.startsWith('pasted://') && (
+            <a
+              id="detail-link-external"
+              href={publisher.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-slate-400 transition-colors"
+            >
+              <ExternalLink size={14} />
+            </a>
+          )}
+          <button
+            id="detail-btn-refresh"
+            onClick={() => onRefetch(selectedFileType)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-slate-500 hover:bg-gray-50 transition-colors"
+          >
+            <RefreshCw size={12} className={status === 'loading' ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Two-panel body */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* LEFT PANEL */}
+        <div className="w-72 xl:w-80 shrink-0 flex flex-col border-r border-gray-200 bg-slate-50 overflow-y-auto">
+
+          {/* Filter section */}
+          <div className="p-4 border-b border-gray-200">
+            <p className="text-xs text-slate-500 mb-3 uppercase tracking-wider">Filter Entries</p>
+            <div className="grid grid-cols-2 gap-2">
+              {FILTERS.map(f => (
+                <button
+                  id={`detail-btn-filter-${f.key}`}
+                  key={f.key}
+                  onClick={() => toggleFilter(f.key)}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition-all ${
+                    activeFilters.has(f.key) ? f.activeColor : f.color
+                  }`}
+                >
+                  <span>{f.label}</span>
+                  <span className="opacity-70">{f.count}</span>
+                </button>
+              ))}
+            </div>
+            {activeFilters.size > 0 && (
+              <button
+                id="detail-btn-clear-filters"
+                onClick={() => setActiveFilters(new Set())}
+                className="mt-2 w-full text-xs text-slate-400 hover:text-slate-600 py-1 transition-colors"
+              >
+                Clear filters → show all
+              </button>
+            )}
+          </div>
+
+          {/* Add entries section */}
+          <div className="p-4 border-b border-gray-200 flex-1">
+            <div className="flex items-center gap-1.5 mb-3">
+              <Sparkles size={12} className="text-blue-500" />
+              <p className="text-xs text-slate-500 uppercase tracking-wider">Add Entries</p>
+            </div>
+
+            <div className="space-y-3">
+              {/* Group dropdown */}
+              <div>
+                <label className="block text-xs text-slate-600 mb-1.5">Insert under section</label>
+                {(parseResult?.groups ?? []).length === 0 ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg">
+                    <Info size={12} className="text-slate-400 shrink-0" />
+                    <p className="text-xs text-slate-500">
+                      No sections detected — new entries will be added at the end of the file.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <select
+                        id="detail-select-group"
+                        value={selectedGroup}
+                        onChange={e => handleGroupSelect(e.target.value)}
+                        className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-8"
+                      >
+                        <option value="">— End of file</option>
+                        {(parseResult?.groups ?? []).map(group => (
+                          <option key={group} value={group}>{group}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {selectedGroup
+                        ? `Entries will be added under "${selectedGroup}"`
+                        : 'Entries will be appended at the end'}
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* New entries textarea */}
+              <div>
+                <label className="block text-xs text-slate-600 mb-1.5">Paste new entries</label>
+                <textarea
+                  id="detail-textarea-new-entries"
+                  value={newEntries}
+                  onChange={e => setNewEntries(e.target.value)}
+                  placeholder={'google.com, pub-1234567890, DIRECT, f08c47fec0942fa0\nappnexus.com, 1234, RESELLER'}
+                  rows={6}
+                  className="w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
+                />
+              </div>
+
+              {/* Apply button */}
+              <button
+                id="detail-btn-apply-changes"
+                onClick={handleApply}
+                disabled={!newEntries.trim()}
+                className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm transition-all ${
+                  newEntries.trim()
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                <Plus size={14} />
+                Apply Changes
+              </button>
+
+
+              {applySuccess && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle size={13} className="text-green-500 shrink-0" />
+                  <span className="text-xs text-green-700">Entries added and re-validated!</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Stats summary */}
+          {stats && (
+            <div className="p-4">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Summary</p>
+              <div className="space-y-2">
+                {[
+                  { label: 'Total Entries', value: stats.totalEntries, color: 'text-slate-700' },
+                  { label: 'DIRECT', value: stats.directEntries, color: 'text-green-600' },
+                  { label: 'RESELLER', value: stats.resellerEntries, color: 'text-purple-600' },
+                  { label: 'Errors', value: stats.errorCount, color: 'text-red-500' },
+                  { label: 'Warnings', value: stats.warningCount, color: 'text-amber-500' },
+                  { label: 'Duplicates', value: stats.duplicateCount, color: 'text-orange-500' },
+                ].map(s => (
+                  <div key={s.label} className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">{s.label}</span>
+                    <span className={`text-xs tabular-nums ${s.color}`}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT PANEL */}
+        <div ref={rightPanelRef} className="flex-1 overflow-y-auto bg-gray-50 py-2">
+          {status === 'loading' && (
+            <div className="flex items-center justify-center py-20 text-slate-400">
+              <RefreshCw size={18} className="animate-spin mr-2" />
+              <span className="text-sm">Fetching {selectedFileType}…</span>
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="mx-4 mt-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
+              <div className="flex items-start gap-2">
+                <XCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm text-red-700">Failed to fetch {selectedFileType}</p>
+                  <p className="text-xs text-red-500 mt-0.5">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {status === 'success' && parseResult && (
+            <>
+              {/* Filter status indicator */}
+              {activeFilters.size > 0 && (
+                <div className="mx-4 mb-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2">
+                  <Info size={12} className="text-blue-400 shrink-0" />
+                  <span className="text-xs text-blue-600">
+                    Showing {filteredLines.length} of {parseResult.lines.length} lines
+                  </span>
+                </div>
+              )}
+
+              {filteredLines.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                  <CheckCircle size={24} className="text-green-400 mb-2" />
+                  <p className="text-sm text-slate-500">No lines match the active filters</p>
+                </div>
+              ) : (
+                <div>
+                  {filteredLines.map(line => {
+                    const isGroupHeader = line.type === 'comment' && parseResult.groups?.includes(line.raw.trim());
+                    const groupKey = line.raw.trim();
+                    return (
+                      <div
+                        key={line.lineNumber}
+                        ref={isGroupHeader ? (el) => { groupRefs.current[groupKey] = el; } : undefined}
+                        className={isGroupHeader && selectedGroup === groupKey ? 'ring-2 ring-blue-400 ring-offset-1 rounded-lg mx-2 my-1' : ''}
+                      >
+                        <EntryRow line={line} issues={parseResult.issues} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {status === 'idle' && (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+              <FileText size={24} className="text-slate-300 mb-2" />
+              <p className="text-sm text-slate-400">Content not yet loaded</p>
+              <button onClick={() => onRefetch(selectedFileType)} className="mt-3 text-xs text-blue-500 hover:text-blue-600">
+                Fetch now
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
