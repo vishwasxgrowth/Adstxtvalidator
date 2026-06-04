@@ -52,7 +52,7 @@ function SeverityBadge({ issues }: { issues: ValidationIssue[] }) {
   );
 }
 
-function EntryRow({ line, issues, isSelected = false, isSelectable = false }: { line: ParsedLine; issues: ValidationIssue[]; isSelected?: boolean; isSelectable?: boolean }) {
+function EntryRow({ line, issues, isSelected = false, isSelectable = false, onToggleSelect }: { line: ParsedLine; issues: ValidationIssue[]; isSelected?: boolean; isSelectable?: boolean; onToggleSelect?: () => void }) {
   const [open, setOpen] = useState(false);
   const lineIssues = getLineIssues(line.lineNumber, issues);
   const hasIssues = lineIssues.some(i => i.severity === 'error' || i.severity === 'warning');
@@ -115,12 +115,15 @@ function EntryRow({ line, issues, isSelected = false, isSelectable = false }: { 
     <div className="mx-2 my-0.5">
       <div
         className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border cursor-pointer transition-colors ${rowBg}`}
-        onClick={() => lineIssues.length > 0 && !isSelectable && setOpen(o => !o)}
+        onClick={() => lineIssues.length > 0 && setOpen(o => !o)}
       >
         {isSelectable && (
-          <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-            isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'
-          }`}>
+          <div
+            className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+              isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'
+            }`}
+            onClick={e => { e.stopPropagation(); onToggleSelect?.(); }}
+          >
             {isSelected && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
           </div>
         )}
@@ -556,13 +559,13 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
           </div>
 
           {/* Add entries section */}
-          <div className="p-4 border-b border-gray-200 flex-1">
+          <div className="p-4 flex-1 flex flex-col overflow-hidden">
             <div className="flex items-center gap-1.5 mb-3">
               <Sparkles size={12} className="text-blue-500" />
               <p className="text-xs text-slate-500 uppercase tracking-wider">Add Entries</p>
             </div>
 
-            <div className="space-y-3">
+            <div className="flex flex-col flex-1 gap-3 min-h-0">
               {/* Group dropdown */}
               <div>
                 <label className="block text-xs text-slate-600 mb-1.5">Insert under section</label>
@@ -599,13 +602,13 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
               </div>
 
               {/* New entries textarea + live analysis */}
-              <div>
-                <label className="block text-xs text-slate-600 mb-1.5">Paste new entries</label>
+              <div className="flex flex-col flex-1 min-h-0">
+                <label className="block text-xs text-slate-600 mb-1.5 shrink-0">Paste new entries</label>
 
                 {showDupHighlight && entryAnalysis ? (
                   /* Highlight mode: read-only view with duplicate lines in red */
-                  <div className="border border-red-200 rounded-lg overflow-hidden bg-white">
-                    <div className="overflow-y-auto" style={{ maxHeight: '144px' }}>
+                  <div className="border border-red-200 rounded-lg overflow-hidden bg-white flex flex-col flex-1 min-h-0">
+                    <div className="overflow-y-auto flex-1">
                       {entryAnalysis.lineResults.map((line, i) => (
                         <div
                           key={i}
@@ -634,7 +637,7 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
                     </div>
                     <button
                       onClick={() => setShowDupHighlight(false)}
-                      className="w-full text-xs text-slate-400 hover:text-slate-600 py-1.5 border-t border-gray-100 transition-colors text-center"
+                      className="w-full text-xs text-slate-400 hover:text-slate-600 py-1.5 border-t border-gray-100 transition-colors text-center shrink-0"
                     >
                       ← Back to edit
                     </button>
@@ -645,8 +648,7 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
                     value={newEntries}
                     onChange={e => { setNewEntries(e.target.value); setShowDupHighlight(false); }}
                     placeholder={'google.com, pub-1234567890, DIRECT, f08c47fec0942fa0\nappnexus.com, 1234, RESELLER'}
-                    rows={6}
-                    className="w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
+                    className="flex-1 min-h-0 w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
                   />
                 )}
 
@@ -718,7 +720,7 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
                 id="detail-btn-apply-changes"
                 onClick={handleApply}
                 disabled={!newEntries.trim()}
-                className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm transition-all ${
+                className={`w-full shrink-0 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm transition-all ${
                   newEntries.trim()
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -819,13 +821,13 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
                         key={line.lineNumber}
                         ref={isGroupHeader ? (el) => { groupRefs.current[groupKey] = el; } : undefined}
                         className={isGroupHeader && selectedGroup === groupKey ? 'ring-2 ring-blue-400 ring-offset-1 rounded-lg mx-2 my-1' : ''}
-                        onClick={isSelectable ? () => toggleLineSelect(line.lineNumber) : undefined}
                       >
                         <EntryRow
                           line={line}
                           issues={parseResult.issues}
                           isSelected={isSelected}
                           isSelectable={isSelectable}
+                          onToggleSelect={isSelectable ? () => toggleLineSelect(line.lineNumber) : undefined}
                         />
                       </div>
                     );
