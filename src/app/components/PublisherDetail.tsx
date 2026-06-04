@@ -279,21 +279,24 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
   function handleSave() {
     if (!content) return;
 
-    // Build timestamp comment
     const now = new Date();
-    const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
     const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const timestampLine = `# Changes made on: ${dateStr} at ${timeStr}`;
+    const timestampLine = `# Last modified: ${dateStr}, ${timeStr}`;
 
-    // Replace existing timestamp line if present, otherwise prepend
     const lines = content.split('\n');
-    if (lines[0].startsWith('# Changes made on:')) {
-      lines[0] = timestampLine;
-    } else {
-      lines.unshift(timestampLine);
-    }
-    const updatedContent = lines.join('\n');
 
+    // Replace existing timestamp if already at top, otherwise prepend with blank line gap
+    if (lines[0].startsWith('# Last modified:') || lines[0].startsWith('# Changes made on:')) {
+      lines[0] = timestampLine;
+      // Ensure blank line after timestamp
+      if (lines[1] !== '') lines.splice(1, 0, '');
+    } else {
+      // Add timestamp + 1 blank line at the very top
+      lines.unshift(timestampLine, '');
+    }
+
+    const updatedContent = lines.join('\n');
     onUpdateContent(selectedFileType, updatedContent);
     setIsSaved(true);
     setIsDirty(false);
@@ -521,7 +524,7 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT PANEL */}
-        <div className="w-[30%] shrink-0 flex flex-col border-r border-gray-200 bg-slate-50 overflow-y-auto">
+        <div className="w-[30%] shrink-0 flex flex-col border-r border-gray-200 bg-slate-50">
 
           {/* Filter section */}
           <div className="p-4 border-b border-gray-200">
@@ -735,27 +738,6 @@ export function PublisherDetail({ publisher, selectedFileType, onFileTypeChange,
             </div>
           </div>
 
-          {/* Stats summary */}
-          {stats && (
-            <div className="p-4">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Summary</p>
-              <div className="space-y-2">
-                {[
-                  { label: 'Total Entries', value: stats.totalEntries, color: 'text-slate-700' },
-                  { label: 'DIRECT', value: stats.directEntries, color: 'text-green-600' },
-                  { label: 'RESELLER', value: stats.resellerEntries, color: 'text-purple-600' },
-                  { label: 'Errors', value: stats.errorCount, color: 'text-red-500' },
-                  { label: 'Warnings', value: stats.warningCount, color: 'text-amber-500' },
-                  { label: 'Duplicates', value: stats.duplicateCount, color: 'text-orange-500' },
-                ].map(s => (
-                  <div key={s.label} className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">{s.label}</span>
-                    <span className={`text-xs tabular-nums ${s.color}`}>{s.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* RIGHT PANEL */}
