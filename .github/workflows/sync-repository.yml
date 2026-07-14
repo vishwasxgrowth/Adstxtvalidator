@@ -33,6 +33,34 @@ jobs:
             exit 1
           fi
 
+          user_status=$(curl --silent --show-error --output /tmp/github-user.json --write-out "%{http_code}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${TARGET_REPO_TOKEN}" \
+            https://api.github.com/user)
+
+          if [ "$user_status" != "200" ]; then
+            echo "The token is invalid, expired, or was copied incorrectly (GitHub API status: ${user_status})."
+            exit 1
+          fi
+
+          echo "Authenticated as: $(jq --raw-output '.login' /tmp/github-user.json)"
+
+          repo_status=$(curl --silent --show-error --output /tmp/github-repository.json --write-out "%{http_code}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${TARGET_REPO_TOKEN}" \
+            https://api.github.com/repos/IvanHoncharenko/dolphin-validator)
+
+          if [ "$repo_status" != "200" ]; then
+            echo "The token cannot access IvanHoncharenko/dolphin-validator (GitHub API status: ${repo_status})."
+            echo "Create the token under an account with write access and explicitly grant it access to this repository."
+            exit 1
+          fi
+
+          if [ "$(jq --raw-output '.permissions.push' /tmp/github-repository.json)" != "true" ]; then
+            echo "The token can see IvanHoncharenko/dolphin-validator but does not have push permission."
+            exit 1
+          fi
+
           git remote add target "https://x-access-token:${TARGET_REPO_TOKEN}@github.com/IvanHoncharenko/dolphin-validator.git"
 
           if git ls-remote --exit-code --heads target main; then
