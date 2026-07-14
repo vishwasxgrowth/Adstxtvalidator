@@ -1,0 +1,43 @@
+name: Sync repository
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-dolphin-validator-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'vishwasxgrowth/Adstxtvalidator'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main to target repository
+        env:
+          TARGET_REPO_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
+        run: |
+          if [ -z "$TARGET_REPO_TOKEN" ]; then
+            echo "TARGET_REPO_TOKEN secret is not configured."
+            exit 1
+          fi
+
+          git remote add target "https://x-access-token:${TARGET_REPO_TOKEN}@github.com/IvanHoncharenko/dolphin-validator.git"
+
+          if git ls-remote --exit-code --heads target main; then
+            git fetch target main
+            git push --force-with-lease target HEAD:main
+          else
+            git push target HEAD:main
+          fi
